@@ -12,7 +12,7 @@ from pyquaternion import Quaternion
 import math
 import threading
 
-# constant definitions for flying rover state
+# constant definitions for flying rover state, landed state
 FLYINGROVER_STATE_UNDEFINED = 0
 FLYINGROVER_STATE_ROVER = 1
 FLYINGROVER_STATE_MC = 2
@@ -20,6 +20,12 @@ FLYINGROVER_STATE_TRANSITION_TO_MC = 3
 FLYINGROVER_STATE_TRANSITION_TO_ROVER = 4
 
 MAV_CMD_DO_FLYINGROVER_TRANSITION = 3100
+
+LANDED_STATE_UNDEFINED = 0
+LANDED_STATE_ON_GROUND = 1
+LANDED_STATE_IN_AIR = 2
+LANDED_STATE_TAKEOFF = 3
+LANDED_STATE_LANDING = 4
 
 
 class Px4Controller:
@@ -33,6 +39,7 @@ class Px4Controller:
         self.cur_target_pose = None
         self.arm_state = False       # flag to indicate that the vehicle is armed
         self.offboard_state = False  # flag to indicate that the vehicle is in offboard mode
+        self.landed_state = "UNDEFINED"
 
         # current flying rover mode: Rover or Multicopter
         self.current_fr_mode = "ROVER"
@@ -63,6 +70,7 @@ class Px4Controller:
         self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         self.flyingrover_mode_pub = rospy.Publisher('gi/flyingrove_mode', String, queue_size=2)
         self.core_ready_pub = rospy.Publisher('gi/core_ready', Bool, queue_size=2)
+        self.landedstate_pub = rospy.Publisher('gi/landed_state', String, queue_size=2)
 
         '''
         ros services
@@ -112,6 +120,7 @@ class Px4Controller:
             # publications
             self.local_target_pub.publish(self.cur_target_pose)
             self.flyingrover_mode_pub.publish(self.current_fr_mode)
+            self.landedstate_pub.publish(String(self.landed_state))
 
             # publish flag to indicate the vehicle is armed and in offboard
             if self.arm_state and self.offboard_state:
@@ -202,6 +211,7 @@ class Px4Controller:
     '''callback for extended state subscription'''
     def extendedstate_callback(self, msg):
         self.extended_state = msg
+
         if self.extended_state.flyingrover_state == FLYINGROVER_STATE_UNDEFINED:
             self.current_fr_mode = "UNDEFINED"
         elif self.extended_state.flyingrover_state == FLYINGROVER_STATE_ROVER:
@@ -214,6 +224,18 @@ class Px4Controller:
             self.current_fr_mode = "MC_TRANSITION_TO_ROVER"
         else:
             print("received flying rover state is not supported")
+
+        if self.extended_state.landed_state == LANDED_STATE_UNDEFINED:
+            self.landed_state = "UNDEFINED"
+        elif self.extended_state.landed_state == LANDED_STATE_ON_GROUND:
+            self.landed_state = "ON_GROUND"
+        elif self.extended_state.landed_state == LANDED_STATE_IN_AIR:
+            self.landed_state == "IN_AIR"
+        elif self.extended_state.landed_state == LANDED_STATE_TAKEOFF:
+            self.landed_state == "TAKEOFF"
+        elif self.extended_state.landed_state == LANDED_STATE_LANDING:
+            self.landed_state == "LANDING"
+
 
     '''convert position in FLU to ENU'''
     def FLU2ENU(self, msg):

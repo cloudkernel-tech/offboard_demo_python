@@ -13,6 +13,8 @@ class Commander:
         self.flyingrover_mode = "ROVER"
         # flag to indicate that the mavros core is ready to work
         self.flag_core_ready = False
+        # landed state
+        self.landed_state = "UNDEFINED"
 
         rospy.init_node("commander_node")
         rate = rospy.Rate(30)
@@ -24,6 +26,7 @@ class Commander:
 
         self.flyingrover_mode_sub = rospy.Subscriber("gi/flyingrove_mode", String, self.flyingrover_mode_callback)
         self.core_ready_sub = rospy.Subscriber("gi/core_ready", Bool, self.coreready_callback)
+        self.landedstate_sub = rospy.Subscriber("gi/landed_state", String, self.landedstate_callback)
 
     # callback for current flying rover mode
     def flyingrover_mode_callback(self, msg):
@@ -32,6 +35,10 @@ class Commander:
     # callback for core ready indication (armed and offboard)
     def coreready_callback(self, msg):
         self.flag_core_ready = msg.data
+
+    # callback for landed state
+    def landedstate_callback(self, msg):
+        self.landed_state = msg.data
 
     # move to a target position
     def move(self, x, y, z, BODY_FLU=False):
