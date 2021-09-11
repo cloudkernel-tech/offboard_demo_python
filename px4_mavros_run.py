@@ -111,13 +111,13 @@ class Px4Controller:
         while not rospy.is_shutdown():
             # publications
             self.local_target_pub.publish(self.cur_target_pose)
-            self.flyingrover_mode_pub(self.current_fr_mode)
+            self.flyingrover_mode_pub.publish(self.current_fr_mode)
 
             # publish flag to indicate the vehicle is armed and in offboard
             if self.arm_state and self.offboard_state:
-                self.core_ready_pub(True)
+                self.core_ready_pub.publish(True)
             else:
-                self.core_ready_pub(False)
+                self.core_ready_pub.publish(False)
 
             # response to mode transition request
             if self.flag_transition_req:
@@ -295,7 +295,7 @@ class Px4Controller:
             self.desired_armed_state = False
         elif msg.data == "TRANSIT_TO_ROVER":
             print("Transition to Rover requested!")
-            self.desired_fr_mode = "Rover"
+            self.desired_fr_mode = "ROVER"
             self.flag_transition_req = True
         elif msg.data == "TRANSIT_TO_MC":
             print("Transition to Multicopter requested!")
@@ -334,9 +334,9 @@ class Px4Controller:
 
     def transit_to_rover(self):
         if self.flyingroverTransitionService(command=MAV_CMD_DO_FLYINGROVER_TRANSITION, confirmation=0, param1=FLYINGROVER_STATE_ROVER):
-            print("transition to mc service is called")
+            print("transition to rover service is called")
         else:
-            print("transition to mc service call failed")
+            print("transition to rover service call failed")
 
     def arm(self):
         if self.armService(True):
