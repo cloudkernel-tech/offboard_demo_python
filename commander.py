@@ -104,7 +104,7 @@ class Commander:
 
 if __name__ == "__main__":
 
-    # the mission performs a square waypoint flight with position target defined in FLU frame
+    # the mission performs a square waypoint flight with position target
     con = Commander()
     time.sleep(2)
 
