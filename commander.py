@@ -9,6 +9,8 @@ import math
 
 class Commander:
     def __init__(self):
+        # current position in ENU frame
+        self.local_position = None
         # current flying rover mode
         self.flyingrover_mode = "ROVER"
         # flag to indicate that the mavros core is ready to work
@@ -24,9 +26,14 @@ class Commander:
         self.yaw_target_pub = rospy.Publisher('gi/set_pose/orientation', Float32, queue_size=10)
         self.custom_activity_pub = rospy.Publisher('gi/set_activity/type', String, queue_size=10)
 
+        self.local_pose_sub = rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_callback)
         self.flyingrover_mode_sub = rospy.Subscriber("gi/flyingrove_mode", String, self.flyingrover_mode_callback)
         self.core_ready_sub = rospy.Subscriber("gi/core_ready", Bool, self.coreready_callback)
         self.landedstate_sub = rospy.Subscriber("gi/landed_state", String, self.landedstate_callback)
+
+    # callback for local position infor
+    def local_pose_callback(self, msg):
+        self.local_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
     # callback for current flying rover mode
     def flyingrover_mode_callback(self, msg):

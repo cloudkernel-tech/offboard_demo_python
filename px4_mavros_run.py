@@ -35,7 +35,6 @@ class Px4Controller:
         self.extended_state = None
         self.local_pose = None
         self.current_heading = None
-        self.local_enu_position = None
         self.cur_target_pose = None
         self.arm_state = False       # flag to indicate that the vehicle is armed
         self.offboard_state = False  # flag to indicate that the vehicle is in offboard mode
@@ -197,7 +196,6 @@ class Px4Controller:
 
     def local_pose_callback(self, msg):
         self.local_pose = msg
-        self.local_enu_position = msg
 
     def mavros_state_callback(self, msg):
         self.mavros_state = msg.mode
