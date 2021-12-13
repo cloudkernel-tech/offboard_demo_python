@@ -21,23 +21,28 @@ Dependencies:
 
 # How to run 
 
+        # terminal 1
         # source the mavros workspace in another ros workspace
         source ~/src/catkinws_offboard/devel/setup.bash
         # launch the mavros node for real tests
         roslaunch mavros px4.launch fcu_url:="/dev/ttyPixhawk:921600"
-        # launch another terminal
+        
+        # terminal 2
+        source ~/src/catkinws_offboard/devel/setup.bash
         python3 px4_mavros_run.py
-        # launch another terminal
+        
+        # terminal 3
+        source ~/src/catkinws_offboard/devel/setup.bash
         python3 commander.py
 
 # References:
 
-Kerloud Flying Rover documentation: <https://cloudkerneltech.gitbook.io/kerloud-flyingrover/>
+* Kerloud Flying Rover documentation: <https://cloudkerneltech.gitbook.io/kerloud-flyingrover/>
 
-Detailed code explanation: <https://cloudkerneltech.gitbook.io/kerloud-flyingrover/user-guide/tutorials/offboard_python>
+* Detailed code explanation: <https://cloudkerneltech.gitbook.io/kerloud-flyingrover/user-guide/tutorials/offboard_python>
 
-An offboard control example with mavros from PX4 community: <https://dev.px4.io/master/en/ros/mavros_offboard.html>
+* An offboard control example with mavros from PX4 community: <https://dev.px4.io/master/en/ros/mavros_offboard.html>
 
-mavros wiki: <https://wiki.ros.org/mavros>
+* mavros wiki: <https://wiki.ros.org/mavros>
 
-GAAS project: <https://gaas.gitbook.io/guide/>
+* GAAS project: <https://gaas.gitbook.io/guide/>

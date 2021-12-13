@@ -199,8 +199,8 @@ class Px4Controller:
 
     def mavros_state_callback(self, msg):
         self.mavros_state = msg.mode
-        self.arm_state = self.mavros_state.armed
-        self.offboard_state = (self.mavros_state.mode == "OFFBOARD")
+        self.arm_state = msg.armed
+        self.offboard_state = (msg.mode == "OFFBOARD")
 
     def imu_callback(self, msg):
         self.imu = msg
