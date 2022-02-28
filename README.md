@@ -16,7 +16,7 @@ Dependencies:
 * mavlink (dev_rover branch): <https://github.com/cloudkernel-tech/mavlink-gdp-release>
 * python module requirements:
 
-    python3 -m pip install rospkg pyquaternion
+    python3 -m pip install rospkg pyquaternion numpy
 
 # How to run 
 

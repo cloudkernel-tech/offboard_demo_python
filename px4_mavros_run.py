@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Control Interface for Kerloud Autocar python API
 # More information can be referred in: https://kerloud-autocar.readthedocs.io/
