@@ -6,9 +6,9 @@
 # Author: cloudkerneltech@gmail.com
 
 import rospy
-from mavros_msgs.msg import State, PositionTarget, ExtendedState, Thrust, ActuatorControl
+from mavros_msgs.msg import State, PositionTarget, AttitudeTarget, ExtendedState, Thrust, ActuatorControl
 from mavros_msgs.srv import CommandBool, SetMode, CommandLong
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32, String, Bool
 
@@ -19,6 +19,7 @@ import threading
 
 # constant definitions for Kerloud Autocar
 MAV_CMD_SET_ROVER_FORWARD_REVERSE_DRIVING = 3101 # cmd ID to set forward/backward driving state
+MAV_FRAME_LOCAL_ENU = 4
 
 LANDED_STATE_UNDEFINED = 0
 LANDED_STATE_ON_GROUND = 1
@@ -27,11 +28,10 @@ LANDED_STATE_TAKEOFF = 3
 LANDED_STATE_LANDING = 4
 
 # command state for kerloud autocar
-POSITION_COMMAND_MODE = 0
-VELOCITY_COMMAND_MODE = 1
-ATTITUDE_COMMAND_MODE = 2
-ACTUATOR_CONTROL_COMMAND_MODE = 3
-
+POSITION_ROVER_COMMAND_MODE = 0
+VELOCITY_ROVER_COMMAND_MODE = 1
+ATTITUDE_ROVER_COMMAND_MODE = 2
+ACTUATOR_CONTROL_ROVER_COMMAND_MODE = 3
 
 
 class Px4Controller:
@@ -40,13 +40,19 @@ class Px4Controller:
         self.imu = None
         self.extended_state = None
         self.local_pose = None
+        self.local_velocity = None
         self.current_heading = None
+
         self.cur_pos_target = None   # current position target
+        self.cur_vel_target = None   # current velocity target
+        self.cur_attitude_target = None # current attitude target
+        self.cur_thrust_target= None # desired thrust for low level autopilot
+        self.cur_actuator_control_target = None # desired actuator control for low level autopilot
 
         self.arm_state = False       # flag to indicate that the vehicle is armed
         self.offboard_state = False  # flag to indicate that the vehicle is in offboard mode
         self.landed_state = "UNDEFINED"
-        self.cmd_mode = POSITION_COMMAND_MODE # current command mode
+        self.cmd_mode = POSITION_ROVER_COMMAND_MODE # current command mode
 
         # arm/disarm request variables
         self.flag_arm_req = False
@@ -61,6 +67,7 @@ class Px4Controller:
         ros subscribers
         '''
         self.local_pose_sub = rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_callback)
+        self.local_velocity_sub = rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, self.local_velocity_callback)
         self.mavros_state_sub = rospy.Subscriber("/mavros/state", State, self.mavros_state_callback)
         self.imu_sub = rospy.Subscriber("/mavros/imu/data", Imu, self.imu_callback)
         self.extended_sub = rospy.Subscriber("/mavros/extended_state", ExtendedState, self.extendedstate_callback)
@@ -76,7 +83,11 @@ class Px4Controller:
         '''
         ros publishers
         '''
-        self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=10)
+        self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=5) # position & velocity target
+        self.attitude_target_pub = rospy.Publisher('mavros/setpoint_attitude/attitude', PoseStamped, queue_size=2)
+        self.thrust_target_pub = rospy.Publisher('mavros/setpoint_attitude/thrust', Thrust, queue_size=2)
+        self.actuator_control_target_pub = rospy.Publisher('mavros/actuator_control', ActuatorControl, queue_size=2)
+
         self.core_ready_pub = rospy.Publisher('gi/core_ready', Bool, queue_size=2)
         self.landedstate_pub = rospy.Publisher('gi/landed_state', String, queue_size=2)
 
@@ -87,7 +98,7 @@ class Px4Controller:
         self.flightModeService = rospy.ServiceProxy('/mavros/set_mode', SetMode)
         self.cmdService= rospy.ServiceProxy('/mavros/cmd/command', CommandLong)
 
-        print("Px4 Controller Initialized!")
+        print("Kerloud python API control interface initialized!")
 
 
     '''entry function for core loop'''
@@ -99,13 +110,11 @@ class Px4Controller:
             if self.current_heading is not None:
                 break
             else:
-                print("Waiting for initialization.")
+                print("Control interface: waiting for initialization.")
                 time.sleep(0.5)
 
         self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
-                                                     self.local_pose.pose.position.y,
-                                                     self.local_pose.pose.position.z,
-                                                     self.current_heading)
+                                                     self.local_pose.pose.position.y)
 
         '''arm and set offboard automatically in simulation mode'''
         if flag_simulation_mode:
@@ -121,14 +130,25 @@ class Px4Controller:
 
                 time.sleep(0.05)
         else:
-            print("Caution: starting in real test...")
+            print("Control interface: starting in real test...")
 
         '''
         main ROS thread
         '''
         while not rospy.is_shutdown():
+
             # publications
-            self.local_target_pub.publish(self.cur_pos_target)
+
+            if self.cmd_mode == POSITION_ROVER_COMMAND_MODE:
+                self.local_target_pub.publish(self.cur_pos_target)
+            elif self.cmd_mode == VELOCITY_ROVER_COMMAND_MODE:
+                self.local_target_pub.publish(self.cur_vel_target)
+            elif self.cmd_mode == ATTITUDE_ROVER_COMMAND_MODE:
+                self.attitude_target_pub.publish(self.cur_attitude_target)
+                self.thrust_target_pub.publish(self.cur_thrust_target)
+            elif self.cmd_mode == ACTUATOR_CONTROL_ROVER_COMMAND_MODE:
+                self.actuator_control_target_pub.publish(self.cur_actuator_control_target)
+
             self.landedstate_pub.publish(String(self.landed_state))
 
             # publish flag to indicate the vehicle is armed and in offboard
@@ -152,45 +172,49 @@ class Px4Controller:
             rate.sleep()
 
 
-    '''contruct position target for autopilot'''
-    def construct_position_target(self, x, y, z, yaw, yaw_rate = 0):
+    ##### Key functions #####
+    '''contruct 2D position target for Kerloud autocar'''
+    """note that yaw control is not accessible here for nonholonomic vehicle"""
+    def construct_position_target(self, x, y):
         target_raw_pose = PositionTarget()
         target_raw_pose.header.stamp = rospy.Time.now()
 
-        target_raw_pose.coordinate_frame = 4 #local ENU frame id, mavlink MAV_FRAME definition
+        target_raw_pose.coordinate_frame = MAV_FRAME_LOCAL_ENU #local ENU frame id, mavlink MAV_FRAME definition
 
         target_raw_pose.position.x = x
         target_raw_pose.position.y = y
-        target_raw_pose.position.z = z
+        target_raw_pose.position.z = self.local_pose.pose.position.z # use z measurement here
 
         target_raw_pose.type_mask = PositionTarget.IGNORE_VX + PositionTarget.IGNORE_VY + PositionTarget.IGNORE_VZ \
                                     + PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ \
-                                    + PositionTarget.FORCE + PositionTarget.IGNORE_YAW_RATE
-
-        target_raw_pose.yaw = yaw
-        target_raw_pose.yaw_rate = yaw_rate  # feedward yaw speed here if not ignored
+                                    + PositionTarget.FORCE + PositionTarget.IGNORE_YAW + PositionTarget.IGNORE_YAW_RATE
 
         return target_raw_pose
 
 
 
-    '''
-    cur_p : poseStamped
-    target_p: positionTarget
-    '''
-    def position_distance(self, cur_p, target_p, threshold=0.1):
-        delta_x = math.fabs(cur_p.pose.position.x - target_p.position.x)
-        delta_y = math.fabs(cur_p.pose.position.y - target_p.position.y)
-        delta_z = math.fabs(cur_p.pose.position.z - target_p.position.z)
+    def construct_velocity_target(self, vx, vy):
+        target_raw_pose = PositionTarget()
+        target_raw_pose.header.stamp = rospy.Time.now()
 
-        if (delta_x + delta_y + delta_z < threshold):
-            return True
-        else:
-            return False
+        target_raw_pose.coordinate_frame = MAV_FRAME_LOCAL_ENU  #local ENU frame id, mavlink MAV_FRAME definition
+        target_raw_pose.velocity.x = vx
+        target_raw_pose.velocity.y = vy
+        target_raw_pose.velocity.z = 0
+
+        target_raw_pose.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ \
+                                    + PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ \
+                                    + PositionTarget.FORCE + PositionTarget.IGNORE_YAW + PositionTarget.IGNORE_YAW_RATE
+
+        return target_raw_pose
 
 
+    ##### Callback functions #####
     def local_pose_callback(self, msg):
         self.local_pose = msg
+
+    def local_velocity_callback(self, msg):
+        self.local_velocity = msg
 
     def mavros_state_callback(self, msg):
         self.mavros_state = msg.mode
@@ -217,16 +241,8 @@ class Px4Controller:
             self.landed_state == "LANDING"
 
 
-    '''convert position in FLU to ENU'''
-    def FLU2ENU(self, msg):
-        ENU_x = msg.pose.position.x * math.cos(self.current_heading) - msg.pose.position.y * math.sin(self.current_heading)
-        ENU_y = msg.pose.position.x * math.sin(self.current_heading) + msg.pose.position.y * math.cos(self.current_heading)
-        ENU_z = msg.pose.position.z
-        return ENU_x, ENU_y, ENU_z
-
-
     def set_target_position_callback(self, msg):
-        print("New position target received!")
+        print("Control interface: new position target received!")
 
         if msg.header.frame_id == 'base_link':
             '''
@@ -241,17 +257,9 @@ class Px4Controller:
 
             print("body FLU frame")
 
-            ENU_X, ENU_Y, ENU_Z = self.FLU2ENU(msg)
+            ENU_X, ENU_Y, ENU_Z = self.convert_pos_FLU2ENU(msg)
 
-            ENU_X = ENU_X + self.local_pose.pose.position.x
-            ENU_Y = ENU_Y + self.local_pose.pose.position.y
-            ENU_Z = ENU_Z + self.local_pose.pose.position.z
-
-            self.cur_pos_target = self.construct_position_target(ENU_X,
-                                                         ENU_Y,
-                                                         ENU_Z,
-                                                         self.current_heading)
-
+            self.cur_pos_target = self.construct_position_target(ENU_X, ENU_Y)
 
         else:
             '''
@@ -266,25 +274,62 @@ class Px4Controller:
 
             print("local ENU frame")
 
-            self.cur_pos_target = self.construct_position_target(msg.pose.position.x,
-                                                         msg.pose.position.y,
-                                                         msg.pose.position.z,
-                                                         self.current_heading)
+            self.cur_pos_target = self.construct_position_target(msg.pose.position.x, msg.pose.position.y)
+
+
+    def set_target_velocity_callback(self, msg):
+        print("Control interface: new velocity target received!")
+
+        if msg.header.frame_id == 'base_link':
+            '''
+            BODY_FLU
+            '''
+            # For Body frame, we will use FLU (Forward, Left and Up)
+            #           +Z     +X
+            #            ^    ^
+            #            |  /
+            #            |/
+            #  +Y <------body
+
+            print("body FLU frame")
+            ENU_vx, ENU_vy, ENU_Z = self.convert_vel_FLU2ENU(msg)
+            self.cur_vel_target = self.construct_velocity_target(ENU_vx, ENU_vy)
+
+        else:
+            '''
+            LOCAL_ENU
+            '''
+            # For world frame, we will use ENU (EAST, NORTH and UP)
+            #     +Z     +Y
+            #      ^    ^
+            #      |  /
+            #      |/
+            #    world------> +X
+            print("local ENU frame")
+            self.cur_vel_target = self.construct_velocity_target(msg.linear.x, msg.linear.y)
+
+
+    def set_target_attitude_callback(self, msg):
+        print("Control interface: new attitude target received!")
+
+
+    def set_thrust_callback(self, msg):
+        print("Control interface: new thrust target received!")
+
+
+    def set_actuator_control_callback(self, msg):
+        print("Control interface: new actuator control target received!")
+
+
 
     '''
      Receive A Custom Activity
      '''
 
     def custom_activity_callback(self, msg):
-        print("Received Custom Activity:", msg.data)
+        print("Control interface: custom activity received:", msg.data)
 
-        if msg.data == "LAND":
-            print("LANDING!")
-            self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
-                                                         self.local_pose.pose.position.y,
-                                                         -5.0,
-                                                         self.current_heading)
-        elif msg.data == "ARM":
+        if msg.data == "ARM":
             print("Arm requested!")
             self.flag_arm_req = True
             self.desired_armed_state = True
@@ -296,18 +341,7 @@ class Px4Controller:
             print("Received Custom Activity:", msg.data, "not supported yet!")
 
 
-    '''
-    return yaw from current IMU
-    '''
-    def q2yaw(self, q):
-        if isinstance(q, Quaternion):
-            rotate_z_rad = q.yaw_pitch_roll[0]
-        else:
-            q_ = Quaternion(q.w, q.x, q.y, q.z)
-            rotate_z_rad = q_.yaw_pitch_roll[0]
-
-        return rotate_z_rad
-
+    ####### Actions for Kerloud vehicle operation ######
     def arm(self):
         if self.armService(True):
             return True
@@ -322,7 +356,6 @@ class Px4Controller:
             print("Vehicle disarm failed!")
             return False
 
-
     def offboard(self):
         if self.flightModeService(custom_mode='OFFBOARD'):
             return True
@@ -330,9 +363,56 @@ class Px4Controller:
             print("Vehicle set offboard failed")
             return False
 
+    ##### Supporting functions ######
+    '''
+    return yaw from current IMU
+    '''
+    def q2yaw(self, q):
+        if isinstance(q, Quaternion):
+            rotate_z_rad = q.yaw_pitch_roll[0]
+        else:
+            q_ = Quaternion(q.w, q.x, q.y, q.z)
+            rotate_z_rad = q_.yaw_pitch_roll[0]
+
+        return rotate_z_rad
+
+    '''convert position in FLU to ENU'''
+    def convert_pos_FLU2ENU(self, msg):
+        ENU_x = msg.pose.position.x * math.cos(self.current_heading) - msg.pose.position.y * math.sin(self.current_heading)
+        ENU_y = msg.pose.position.x * math.sin(self.current_heading) + msg.pose.position.y * math.cos(self.current_heading)
+        ENU_x = ENU_x + self.local_pose.pose.position.x
+        ENU_y = ENU_y + self.local_pose.pose.position.y
+        ENU_z = msg.pose.position.z
+
+        return ENU_x, ENU_y, ENU_z
+
+
+    '''convert velocity in FLU to ENU'''
+    def convert_vel_FLU2ENU(self, msg):
+
+        ENU_vx = msg.twist.linear.x * math.cos(self.current_heading) - msg.twist.linear.y * math.sin(self.current_heading)
+        ENU_vy = msg.twist.linear.x * math.sin(self.current_heading) + msg.twist.linear.y * math.cos(self.current_heading)
+        ENU_vz = msg.twist.linear.z
+
+        return ENU_vx, ENU_vy, ENU_vz
+
+    '''
+    cur_p : poseStamped
+    target_p: positionTarget
+    threshold: threshold for position reach condition, unit: m
+    '''
+    def check_position_reach_condition(self, cur_p, target_p, threshold=0.1):
+        delta_x = math.fabs(cur_p.pose.position.x - target_p.position.x)
+        delta_y = math.fabs(cur_p.pose.position.y - target_p.position.y)
+
+        if (delta_x + delta_y < threshold):
+            return True
+        else:
+            return False
+
 
 if __name__ == '__main__':
     con = Px4Controller()
-    con.start(False)# use for real test
     #con.start(True) # use for simulation
+    con.start(False) # use for real test
 
