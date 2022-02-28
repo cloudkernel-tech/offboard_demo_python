@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 
+# Control Interface for Kerloud Autocar python API
+# More information can be referred in: https://kerloud-autocar.readthedocs.io/
+# All rights reserved for Cloudkernel Technologies (Shenzhen) Co., Ltd.
+# Author: cloudkerneltech@gmail.com
+
 import rospy
-from mavros_msgs.msg import State, PositionTarget, ExtendedState
+from mavros_msgs.msg import State, PositionTarget, ExtendedState, Thrust, ActuatorControl
 from mavros_msgs.srv import CommandBool, SetMode, CommandLong
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32, String, Bool
 
@@ -12,20 +17,21 @@ from pyquaternion import Quaternion
 import math
 import threading
 
-# constant definitions for flying rover state, landed state
-FLYINGROVER_STATE_UNDEFINED = 0
-FLYINGROVER_STATE_ROVER = 1
-FLYINGROVER_STATE_MC = 2
-FLYINGROVER_STATE_TRANSITION_TO_MC = 3
-FLYINGROVER_STATE_TRANSITION_TO_ROVER = 4
-
-MAV_CMD_DO_FLYINGROVER_TRANSITION = 3100
+# constant definitions for Kerloud Autocar
+MAV_CMD_SET_ROVER_FORWARD_REVERSE_DRIVING = 3101 # cmd ID to set forward/backward driving state
 
 LANDED_STATE_UNDEFINED = 0
 LANDED_STATE_ON_GROUND = 1
 LANDED_STATE_IN_AIR = 2
 LANDED_STATE_TAKEOFF = 3
 LANDED_STATE_LANDING = 4
+
+# command state for kerloud autocar
+POSITION_COMMAND_MODE = 0
+VELOCITY_COMMAND_MODE = 1
+ATTITUDE_COMMAND_MODE = 2
+ACTUATOR_CONTROL_COMMAND_MODE = 3
+
 
 
 class Px4Controller:
@@ -35,21 +41,21 @@ class Px4Controller:
         self.extended_state = None
         self.local_pose = None
         self.current_heading = None
-        self.cur_target_pose = None
+        self.cur_pos_target = None   # current position target
+
         self.arm_state = False       # flag to indicate that the vehicle is armed
         self.offboard_state = False  # flag to indicate that the vehicle is in offboard mode
         self.landed_state = "UNDEFINED"
+        self.cmd_mode = POSITION_COMMAND_MODE # current command mode
 
-        # current flying rover mode: Rover or Multicopter
-        self.current_fr_mode = "ROVER"
-        self.flag_transition_req = False
-        self.desired_fr_mode = "ROVER"
-        self.last_transition_call_timestamp = 0
-
-        # arm/disarm request flag
+        # arm/disarm request variables
         self.flag_arm_req = False
         self.desired_armed_state = True
         self.last_arm_call_timestamp = 0
+
+        # forward/backward driving request variables
+
+
 
         '''
         ros subscribers
@@ -60,14 +66,17 @@ class Px4Controller:
         self.extended_sub = rospy.Subscriber("/mavros/extended_state", ExtendedState, self.extendedstate_callback)
 
         self.set_target_position_sub = rospy.Subscriber("gi/set_pose/position", PoseStamped, self.set_target_position_callback)
-        self.set_target_yaw_sub = rospy.Subscriber("gi/set_pose/orientation", Float32, self.set_target_yaw_callback)
+        self.set_target_velocity_sub = rospy.Subscriber("gi/set_pose/velocity", Twist, self.set_target_velocity_callback)
+        self.set_target_attitude_sub = rospy.Subscriber("gi/set_pose/attitude", PoseStamped, self.set_target_attitude_callback)
+        self.set_thrust_sub = rospy.Subscriber("gi/set_thrust", Thrust, self.set_thrust_callback)
+        self.set_actuator_control_sub = rospy.Subscriber("gi/set_act_control", Thrust, self.set_actuator_control_callback)
+
         self.custom_activity_sub = rospy.Subscriber("gi/set_activity/type", String, self.custom_activity_callback)
 
         '''
         ros publishers
         '''
         self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        self.flyingrover_mode_pub = rospy.Publisher('gi/flyingrove_mode', String, queue_size=2)
         self.core_ready_pub = rospy.Publisher('gi/core_ready', Bool, queue_size=2)
         self.landedstate_pub = rospy.Publisher('gi/landed_state', String, queue_size=2)
 
@@ -76,7 +85,7 @@ class Px4Controller:
         '''
         self.armService = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
         self.flightModeService = rospy.ServiceProxy('/mavros/set_mode', SetMode)
-        self.flyingroverTransitionService = rospy.ServiceProxy('/mavros/cmd/command', CommandLong)
+        self.cmdService= rospy.ServiceProxy('/mavros/cmd/command', CommandLong)
 
         print("Px4 Controller Initialized!")
 
@@ -93,7 +102,7 @@ class Px4Controller:
                 print("Waiting for initialization.")
                 time.sleep(0.5)
 
-        self.cur_target_pose = self.construct_target(self.local_pose.pose.position.x,
+        self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
                                                      self.local_pose.pose.position.y,
                                                      self.local_pose.pose.position.z,
                                                      self.current_heading)
@@ -103,7 +112,7 @@ class Px4Controller:
             print("setting arm and offboard in simulation mode...")
 
             for i in range(100):
-                self.local_target_pub.publish(self.cur_target_pose)
+                self.local_target_pub.publish(self.cur_pos_target)
                 self.arm_state = self.arm()
                 self.offboard_state = self.offboard()
 
@@ -111,14 +120,15 @@ class Px4Controller:
                     break
 
                 time.sleep(0.05)
+        else:
+            print("Caution: starting in real test...")
 
         '''
         main ROS thread
         '''
         while not rospy.is_shutdown():
             # publications
-            self.local_target_pub.publish(self.cur_target_pose)
-            self.flyingrover_mode_pub.publish(self.current_fr_mode)
+            self.local_target_pub.publish(self.cur_pos_target)
             self.landedstate_pub.publish(String(self.landed_state))
 
             # publish flag to indicate the vehicle is armed and in offboard
@@ -126,21 +136,6 @@ class Px4Controller:
                 self.core_ready_pub.publish(True)
             else:
                 self.core_ready_pub.publish(False)
-
-            # response to mode transition request
-            if self.flag_transition_req:
-                if time.time() - self.last_transition_call_timestamp>1.0:
-                    if self.desired_fr_mode == "ROVER":
-                        self.transit_to_rover()
-                    elif self.desired_fr_mode == "MC":
-                        self.transit_to_mc()
-                    else:
-                        print("Only ROVER and MC flying rover modes are supported!")
-
-                    self.last_transition_call_timestamp = time.time()
-
-                if self.current_fr_mode == self.desired_fr_mode:
-                    self.flag_transition_req = False
 
             # response to arm/disarm request
             if self.flag_arm_req:
@@ -158,7 +153,7 @@ class Px4Controller:
 
 
     '''contruct position target for autopilot'''
-    def construct_target(self, x, y, z, yaw, yaw_rate = 0):
+    def construct_position_target(self, x, y, z, yaw, yaw_rate = 0):
         target_raw_pose = PositionTarget()
         target_raw_pose.header.stamp = rospy.Time.now()
 
@@ -210,19 +205,6 @@ class Px4Controller:
     def extendedstate_callback(self, msg):
         self.extended_state = msg
 
-        if self.extended_state.flyingrover_state == FLYINGROVER_STATE_UNDEFINED:
-            self.current_fr_mode = "UNDEFINED"
-        elif self.extended_state.flyingrover_state == FLYINGROVER_STATE_ROVER:
-            self.current_fr_mode = "ROVER"
-        elif self.extended_state.flyingrover_state == FLYINGROVER_STATE_MC:
-            self.current_fr_mode = "MC"
-        elif self.extended_state.flyingrover_state == FLYINGROVER_STATE_TRANSITION_TO_MC:
-            self.current_fr_mode = "ROVER_TRANSITION_TO_MC"
-        elif self.extended_state.flyingrover_state == FLYINGROVER_STATE_TRANSITION_TO_ROVER:
-            self.current_fr_mode = "MC_TRANSITION_TO_ROVER"
-        else:
-            print("received flying rover state is not supported")
-
         if self.extended_state.landed_state == LANDED_STATE_UNDEFINED:
             self.landed_state = "UNDEFINED"
         elif self.extended_state.landed_state == LANDED_STATE_ON_GROUND:
@@ -265,7 +247,7 @@ class Px4Controller:
             ENU_Y = ENU_Y + self.local_pose.pose.position.y
             ENU_Z = ENU_Z + self.local_pose.pose.position.z
 
-            self.cur_target_pose = self.construct_target(ENU_X,
+            self.cur_pos_target = self.construct_position_target(ENU_X,
                                                          ENU_Y,
                                                          ENU_Z,
                                                          self.current_heading)
@@ -284,7 +266,7 @@ class Px4Controller:
 
             print("local ENU frame")
 
-            self.cur_target_pose = self.construct_target(msg.pose.position.x,
+            self.cur_pos_target = self.construct_position_target(msg.pose.position.x,
                                                          msg.pose.position.y,
                                                          msg.pose.position.z,
                                                          self.current_heading)
@@ -298,13 +280,10 @@ class Px4Controller:
 
         if msg.data == "LAND":
             print("LANDING!")
-            self.cur_target_pose = self.construct_target(self.local_pose.pose.position.x,
+            self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
                                                          self.local_pose.pose.position.y,
                                                          -5.0,
                                                          self.current_heading)
-        elif msg.data == "HOVER":
-            print("HOVERING!")
-            self.hover()
         elif msg.data == "ARM":
             print("Arm requested!")
             self.flag_arm_req = True
@@ -313,26 +292,9 @@ class Px4Controller:
             print("Disarm requested!")
             self.flag_arm_req = True
             self.desired_armed_state = False
-        elif msg.data == "TRANSIT_TO_ROVER":
-            print("Transition to Rover requested!")
-            self.desired_fr_mode = "ROVER"
-            self.flag_transition_req = True
-        elif msg.data == "TRANSIT_TO_MC":
-            print("Transition to Multicopter requested!")
-            self.desired_fr_mode = "MC"
-            self.flag_transition_req = True
         else:
             print("Received Custom Activity:", msg.data, "not supported yet!")
 
-
-    def set_target_yaw_callback(self, msg):
-        print("Received New Yaw Task!")
-
-        yaw_rad = msg.data * math.pi / 180.0
-        self.cur_target_pose = self.construct_target(self.local_pose.pose.position.x,
-                                                     self.local_pose.pose.position.y,
-                                                     self.local_pose.pose.position.z,
-                                                     yaw_rad)
 
     '''
     return yaw from current IMU
@@ -345,18 +307,6 @@ class Px4Controller:
             rotate_z_rad = q_.yaw_pitch_roll[0]
 
         return rotate_z_rad
-
-    def transit_to_mc(self):
-        if self.flyingroverTransitionService(command=MAV_CMD_DO_FLYINGROVER_TRANSITION, confirmation=0, param1=FLYINGROVER_STATE_MC):
-            print("transition to mc service is called")
-        else:
-            print("transition to mc service call failed")
-
-    def transit_to_rover(self):
-        if self.flyingroverTransitionService(command=MAV_CMD_DO_FLYINGROVER_TRANSITION, confirmation=0, param1=FLYINGROVER_STATE_ROVER):
-            print("transition to rover service is called")
-        else:
-            print("transition to rover service call failed")
 
     def arm(self):
         if self.armService(True):
@@ -381,13 +331,8 @@ class Px4Controller:
             return False
 
 
-    def hover(self):
-        self.cur_target_pose = self.construct_target(self.local_pose.pose.position.x,
-                                                     self.local_pose.pose.position.y,
-                                                     self.local_pose.pose.position.z,
-                                                     self.current_heading)
-
 if __name__ == '__main__':
     con = Px4Controller()
-    con.start()
+    con.start(False)# use for real test
+    #con.start(True) # use for simulation
 
