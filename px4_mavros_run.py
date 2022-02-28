@@ -8,7 +8,7 @@
 import rospy
 from mavros_msgs.msg import State, PositionTarget, AttitudeTarget, ExtendedState, Thrust, ActuatorControl
 from mavros_msgs.srv import CommandBool, SetMode, CommandLong
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32, String, Bool
 
@@ -74,7 +74,7 @@ class Px4Controller:
         self.extended_sub = rospy.Subscriber("/mavros/extended_state", ExtendedState, self.extendedstate_callback)
 
         self.set_target_position_sub = rospy.Subscriber("gi/set_pose/position", PoseStamped, self.set_target_position_callback)
-        self.set_target_velocity_sub = rospy.Subscriber("gi/set_pose/velocity", Twist, self.set_target_velocity_callback)
+        self.set_target_velocity_sub = rospy.Subscriber("gi/set_pose/velocity", Vector3Stamped, self.set_target_velocity_callback)
         self.set_target_attitude_sub = rospy.Subscriber("gi/set_pose/attitude", PoseStamped, self.set_target_attitude_callback)
         self.set_thrust_sub = rospy.Subscriber("gi/set_thrust", Thrust, self.set_thrust_callback)
         self.set_actuator_control_sub = rospy.Subscriber("gi/set_act_control", ActuatorControl, self.set_actuator_control_callback)
@@ -343,13 +343,16 @@ class Px4Controller:
     '''callback for forward/backward driving command in attitude and actuator control command states'''
     def set_driving_state_callback(self, msg):
         print("Control interface: set driving state cmd received")
-        if msg.data == True:
-            self.flag_set_driving_state = True
-            self.desired_driving_state = True
-        else:
-            self.flag_set_driving_state = True
-            self.desired_driving_state = False
 
+        if self.cmd_mode == ATTITUDE_ROVER_COMMAND_MODE or self.cmd_mode == ACTUATOR_CONTROL_ROVER_COMMAND_MODE:
+            if msg.data == True:
+                self.flag_set_driving_state = True
+                self.desired_driving_state = True
+            else:
+                self.flag_set_driving_state = True
+                self.desired_driving_state = False
+        else:
+            print("Control interface: driving state cmd rejected due to command mode constraint, forward driving by default")
 
     ####### Actions for Kerloud vehicle operation ######
     def arm(self):
@@ -411,9 +414,9 @@ class Px4Controller:
     '''convert velocity in FLU to ENU'''
     def convert_vel_FLU2ENU(self, msg):
 
-        ENU_vx = msg.twist.linear.x * math.cos(self.current_heading) - msg.twist.linear.y * math.sin(self.current_heading)
-        ENU_vy = msg.twist.linear.x * math.sin(self.current_heading) + msg.twist.linear.y * math.cos(self.current_heading)
-        ENU_vz = msg.twist.linear.z
+        ENU_vx = msg.vector.x * math.cos(self.current_heading) - msg.vector.y * math.sin(self.current_heading)
+        ENU_vy = msg.vector.x * math.sin(self.current_heading) + msg.vector.y * math.cos(self.current_heading)
+        ENU_vz = msg.vector.z
 
         return ENU_vx, ENU_vy, ENU_vz
 
