@@ -60,9 +60,10 @@ class Px4Controller:
         self.last_arm_call_timestamp = 0
 
         # forward/backward driving request variables
-
-
-
+        self.flag_set_driving_state = False
+        self.forward_driving_state = True   #true means the rover is in forward driving state, backward driving is only applicable in attitude and actuator control modes
+        self.desired_driving_state = True # desired driving state, true means forward driving
+        self.last_set_driving_state_timestamp = 0
         '''
         ros subscribers
         '''
@@ -76,14 +77,15 @@ class Px4Controller:
         self.set_target_velocity_sub = rospy.Subscriber("gi/set_pose/velocity", Twist, self.set_target_velocity_callback)
         self.set_target_attitude_sub = rospy.Subscriber("gi/set_pose/attitude", PoseStamped, self.set_target_attitude_callback)
         self.set_thrust_sub = rospy.Subscriber("gi/set_thrust", Thrust, self.set_thrust_callback)
-        self.set_actuator_control_sub = rospy.Subscriber("gi/set_act_control", Thrust, self.set_actuator_control_callback)
+        self.set_actuator_control_sub = rospy.Subscriber("gi/set_act_control", ActuatorControl, self.set_actuator_control_callback)
 
         self.custom_activity_sub = rospy.Subscriber("gi/set_activity/type", String, self.custom_activity_callback)
+        self.driving_state_sub = rospy.Subscriber('gi/set_driving_state', Bool, self.set_driving_state_callback)
 
         '''
         ros publishers
         '''
-        self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=5) # position & velocity target
+        self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=5) # position & velocity command modes
         self.attitude_target_pub = rospy.Publisher('mavros/setpoint_attitude/attitude', PoseStamped, queue_size=2)
         self.thrust_target_pub = rospy.Publisher('mavros/setpoint_attitude/thrust', Thrust, queue_size=2)
         self.actuator_control_target_pub = rospy.Publisher('mavros/actuator_control', ActuatorControl, queue_size=2)
@@ -169,6 +171,17 @@ class Px4Controller:
                 if self.arm_state == self.desired_armed_state:
                     self.flag_arm_req = False
 
+            # response to forward/backward driving request
+            if self.flag_set_driving_state:
+                if time.time() - self.last_set_driving_state_timestamp > 1.0:
+                    if self.desired_driving_state:
+                        self.set_driving_state(1)
+                    else:
+                        self.set_driving_state(0)
+
+                    self.last_set_driving_state_timestamp = time.time()
+
+
             rate.sleep()
 
 
@@ -243,6 +256,7 @@ class Px4Controller:
 
     def set_target_position_callback(self, msg):
         print("Control interface: new position target received!")
+        self.cmd_mode = POSITION_ROVER_COMMAND_MODE
 
         if msg.header.frame_id == 'base_link':
             '''
@@ -279,47 +293,32 @@ class Px4Controller:
 
     def set_target_velocity_callback(self, msg):
         print("Control interface: new velocity target received!")
+        self.cmd_mode = VELOCITY_ROVER_COMMAND_MODE
 
         if msg.header.frame_id == 'base_link':
-            '''
-            BODY_FLU
-            '''
-            # For Body frame, we will use FLU (Forward, Left and Up)
-            #           +Z     +X
-            #            ^    ^
-            #            |  /
-            #            |/
-            #  +Y <------body
-
             print("body FLU frame")
             ENU_vx, ENU_vy, ENU_Z = self.convert_vel_FLU2ENU(msg)
             self.cur_vel_target = self.construct_velocity_target(ENU_vx, ENU_vy)
 
         else:
-            '''
-            LOCAL_ENU
-            '''
-            # For world frame, we will use ENU (EAST, NORTH and UP)
-            #     +Z     +Y
-            #      ^    ^
-            #      |  /
-            #      |/
-            #    world------> +X
             print("local ENU frame")
             self.cur_vel_target = self.construct_velocity_target(msg.linear.x, msg.linear.y)
 
 
     def set_target_attitude_callback(self, msg):
         print("Control interface: new attitude target received!")
+        self.cmd_mode = ATTITUDE_ROVER_COMMAND_MODE
+        self.cur_attitude_target = msg
 
 
     def set_thrust_callback(self, msg):
         print("Control interface: new thrust target received!")
-
+        self.cur_thrust_target = msg
 
     def set_actuator_control_callback(self, msg):
+        self.cmd_mode = ACTUATOR_CONTROL_ROVER_COMMAND_MODE
         print("Control interface: new actuator control target received!")
-
+        self.cur_actuator_control_target = msg
 
 
     '''
@@ -339,6 +338,17 @@ class Px4Controller:
             self.desired_armed_state = False
         else:
             print("Received Custom Activity:", msg.data, "not supported yet!")
+
+
+    '''callback for forward/backward driving command in attitude and actuator control command states'''
+    def set_driving_state_callback(self, msg):
+        print("Control interface: set driving state cmd received")
+        if msg.data == True:
+            self.flag_set_driving_state = True
+            self.desired_driving_state = True
+        else:
+            self.flag_set_driving_state = True
+            self.desired_driving_state = False
 
 
     ####### Actions for Kerloud vehicle operation ######
@@ -362,6 +372,17 @@ class Px4Controller:
         else:
             print("Vehicle set offboard failed")
             return False
+
+    '''set desired driving state, state=1 for forward driving, state=0 for backward driving'''
+    def set_driving_state(self, state=1):
+        if self.cmdService(command=MAV_CMD_SET_ROVER_FORWARD_REVERSE_DRIVING, confirmation=0, param1=state):
+            self.flag_set_driving_state = False # clear the req flag in main loop
+            return True
+        else:
+            print("Vehicle set offboard failed")
+            return False
+
+
 
     ##### Supporting functions ######
     '''
