@@ -182,7 +182,7 @@ class Commander:
 
 if __name__ == "__main__":
 
-    # the mission performs a square waypoint flight with position target
+    # initialize the commanding interface
     con = Commander()
     time.sleep(2)
 
