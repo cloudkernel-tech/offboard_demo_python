@@ -125,15 +125,18 @@ class Px4Controller:
         if flag_simulation_mode:
             print("setting arm and offboard in simulation mode...")
 
-            for i in range(100):
+            while True:
+
+                time.sleep(1.0)
+
                 self.local_target_pub.publish(self.cur_pos_target)
                 self.arm_state = self.arm()
                 self.offboard_state = self.offboard()
 
                 if self.arm_state and self.offboard_state:
+                    print("vehicle is armed and set in offboard mode")
                     break
 
-                time.sleep(0.05)
         else:
             print("Control interface: starting in real test...")
 
