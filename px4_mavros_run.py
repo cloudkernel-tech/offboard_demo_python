@@ -17,6 +17,9 @@ from pyquaternion import Quaternion
 import math
 import threading
 
+import argparse
+
+
 # constant definitions for Kerloud Autocar
 MAV_CMD_SET_ROVER_FORWARD_REVERSE_DRIVING = 3101 # cmd ID to set forward/backward driving state
 MAV_FRAME_LOCAL_ENU = 4
@@ -435,8 +438,19 @@ class Px4Controller:
             return False
 
 
-if __name__ == '__main__':
+def main():
+
+    parser = argparse.ArgumentParser(description='python mavros main entry function')
+    parser.add_argument('--sim', type=bool, action="store", default=False, help='Simulation flag: True for software in the loop simulation, false for real tests')
+    args = parser.parse_args()
+
     con = Px4Controller()
-    #con.start(True) # use for simulation
-    con.start(False) # use for real test
+    con.start(args.sim)     # use for simulation by default
+
+
+
+if __name__ == '__main__':
+    main()
+
+
 

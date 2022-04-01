@@ -20,22 +20,40 @@ Dependencies:
 
 # How to run 
 
+## Simulation test
+
+        # Users have to start the Kerloud rover SITL space first  
+        
         # terminal 1
-        # source the mavros workspace in another ros workspace
-        cd <catkinws_offboard>
-        source devel/setup.bash
+        # source the mavros package in the c++ offboard ros workspace
+        source ../catkinws_offboard/devel/setup.bash
+        # launch the mavros node for real tests
+        roslaunch mavros px4.launch fcu_url:="udp://:14540@127.0.0.1:14557"
+        
+        # terminal 2
+        source ../catkinws_offboard/devel/setup.bash
+        python3 px4_mavros_run.py --sim True
+        
+        # terminal 3
+        source ../catkinws_offboard/devel/setup.bash
+        python3 commander.py
+
+## Real test
+
+        # terminal 1
+        # source the mavros package in the c++ offboard ros workspace
+        source ../catkinws_offboard/devel/setup.bash
         # launch the mavros node for real tests
         roslaunch mavros px4.launch fcu_url:="/dev/ttyPixhawk:921600"
         
         # terminal 2
-        cd <catkinws_offboard>
-        source devel/setup.bash
+        source ../catkinws_offboard/devel/setup.bash
         python3 px4_mavros_run.py
         
         # terminal 3
-        cd <catkinws_offboard>
-        source devel/setup.bash
+        source ../catkinws_offboard/devel/setup.bash
         python3 commander.py
+
 
 # References:
 
