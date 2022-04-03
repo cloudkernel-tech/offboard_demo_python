@@ -126,16 +126,15 @@ class Px4Controller:
             print("setting arm and offboard in simulation mode...")
 
             while True:
-
-                time.sleep(1.0)
-
                 self.local_target_pub.publish(self.cur_pos_target)
-                self.arm_state = self.arm()
-                self.offboard_state = self.offboard()
-
+                self.arm()
+                self.offboard()
                 if self.arm_state and self.offboard_state:
                     print("vehicle is armed and set in offboard mode")
                     break
+
+                time.sleep(0.05)
+
 
         else:
             print("Control interface: starting in real test...")
@@ -308,7 +307,7 @@ class Px4Controller:
 
         else:
             print("local ENU frame")
-            self.cur_vel_target = self.construct_velocity_target(msg.linear.x, msg.linear.y)
+            self.cur_vel_target = self.construct_velocity_target(msg.vector.x, msg.vector.y)
 
 
     def set_target_attitude_callback(self, msg):
