@@ -133,7 +133,7 @@ class Px4Controller:
                     print("vehicle is armed and set in offboard mode")
                     break
 
-                time.sleep(0.05)
+                time.sleep(0.1)
 
 
         else:

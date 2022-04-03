@@ -70,11 +70,13 @@ class Commander:
         self.velocity_target_pub.publish(self.set_velocity(vx, vy, vz, BODY_FLU))
 
     # set desired yaw and throttle inputs for attitude control mode
-    # yaw: unit rad, throttle: 0-1
+    # yaw: unit rad (expressed in ENU frame), throttle: 0~1
     def set_yaw_and_throttle(self, yaw, throttle):
-        # attitude setpoint from yaw
+        # attitude setpoint from yaw, convert yaw to NED frame due to mavros plugin setting
         # q = quaternion_from_euler(0, 0, yaw)
-        q = self.get_quaternion_from_euler(0, 0, yaw)
+        yaw_ned = self.wrap2pi(math.pi/2 - yaw)
+
+        q = self.get_quaternion_from_euler(0, 0, yaw_ned)
 
         pose_tmp = PoseStamped()
         pose_tmp.pose.orientation.x = q[0]
@@ -159,6 +161,14 @@ class Commander:
         vel.vector.z = vz
 
         return vel
+
+    """limit an angle to the range [-Pi, Pi]"""
+    def wrap2pi(self, angle_rad):
+        if angle_rad > math.pi:
+            angle_rad = angle_rad - 2.0*math.pi
+        elif angle_rad < -math.pi:
+            angle_rad = angle_rad + 2.0*math.pi
+        return angle_rad
 
 
     def get_quaternion_from_euler(self, roll, pitch, yaw):
