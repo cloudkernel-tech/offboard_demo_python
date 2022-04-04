@@ -36,6 +36,8 @@ VELOCITY_ROVER_COMMAND_MODE = 1
 ATTITUDE_ROVER_COMMAND_MODE = 2
 ACTUATOR_CONTROL_ROVER_COMMAND_MODE = 3
 
+ROVER_FORWARD_DRIVING_STATE = True
+ROVER_BACKWARD_DRIVING_STATE = False
 
 class Px4Controller:
 
@@ -63,9 +65,9 @@ class Px4Controller:
         self.last_arm_call_timestamp = 0
 
         # forward/backward driving request variables
-        self.flag_set_driving_state = False
-        self.forward_driving_state = True   #true means the rover is in forward driving state, backward driving is only applicable in attitude and actuator control modes
-        self.desired_driving_state = True # desired driving state, true means forward driving
+        self.flag_set_driving_state = False  # true: set driving direction cmd is activated
+        self.forward_driving_state = True   #true: rover is in forward driving state, backward driving is only applicable in attitude and actuator control modes
+        self.desired_driving_state = ROVER_FORWARD_DRIVING_STATE  # desired driving state, true: forward driving
         self.last_set_driving_state_timestamp = 0
         '''
         ros subscribers
@@ -179,7 +181,7 @@ class Px4Controller:
             # response to forward/backward driving request
             if self.flag_set_driving_state:
                 if time.time() - self.last_set_driving_state_timestamp > 1.0:
-                    if self.desired_driving_state:
+                    if self.desired_driving_state == ROVER_FORWARD_DRIVING_STATE:
                         self.set_driving_state(1)
                     else:
                         self.set_driving_state(0)
@@ -352,12 +354,12 @@ class Px4Controller:
         if self.cmd_mode == ATTITUDE_ROVER_COMMAND_MODE or self.cmd_mode == ACTUATOR_CONTROL_ROVER_COMMAND_MODE:
             if msg.data == True:
                 self.flag_set_driving_state = True
-                self.desired_driving_state = True
+                self.desired_driving_state = ROVER_FORWARD_DRIVING_STATE
             else:
                 self.flag_set_driving_state = True
-                self.desired_driving_state = False
+                self.desired_driving_state = ROVER_BACKWARD_DRIVING_STATE
         else:
-            print("Control interface: driving state cmd rejected due to command mode constraint, forward driving by default")
+            print("Control interface: driving state cmd not supported in position/velocity guidance, forward driving by default")
 
     ####### Actions for Kerloud vehicle operation ######
     def arm(self):
@@ -387,7 +389,7 @@ class Px4Controller:
             self.flag_set_driving_state = False # clear the req flag in main loop
             return True
         else:
-            print("Vehicle set offboard failed")
+            print("Vehicle set driving state service call failed")
             return False
 
 
