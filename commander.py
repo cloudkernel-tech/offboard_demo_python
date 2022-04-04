@@ -205,29 +205,39 @@ if __name__ == "__main__":
     # position guidance cmd
     print("Commander interface: start position control mode")
     con.move_position(5, 0, 0)
+    print("Rover: go to position (5,0,0)")
     time.sleep(5)
     con.move_position(5, 5, 0)
+    print("Rover: go to position (5,5,0)")
     time.sleep(5)
 
     # velocity guidance cmd
     print("Commander interface: start velocity control mode")
-    con.move_velocity(0.3, 0.3, 0.3, False)
+    con.move_velocity(1, 2, 0.0, False)
+    print("Rover: track velocity (1, 2, 0.0)")
     time.sleep(5)
 
     # attitude guidance cmd
     print("Commander interface: start attitude control mode")
     print("set forward driving")
+    con.set_yaw_and_throttle(3.14/2, 0.6)
     con.set_forward_driving()
-    con.set_yaw_and_throttle(3.14/2, 0.3)
+    print("Rover: forward driving, target yaw pi/2, throttle 0.6")
+    time.sleep(5)
+    con.set_yaw_and_throttle(3.14/2, 0.6)
+    con.set_backward_driving()
+    print("Rover: backward driving, target yaw pi/2, throttle 0.6")
     time.sleep(5)
 
     # direct actuator control cmd
     print("Commander interface: start actuator control mode")
     con.set_steering_servo_and_throttle(0.5, 0.3)
+    con.set_forward_driving()
+    print("Rover: forward driving, steering input 0.5, throttle 0.3")
     time.sleep(5)
-    con.set_backward_driving()
-    print("set backward driving")
     con.set_steering_servo_and_throttle(0.5, 0.3)
+    con.set_backward_driving()
+    print("Rover: backward driving, steering input 0.5, throttle 0.3")
 
     #disarm for safety at the end
     print("Commander interface: disarm vehicle, mission completed")
