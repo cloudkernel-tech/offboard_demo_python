@@ -427,21 +427,6 @@ class Px4Controller:
 
         return ENU_vx, ENU_vy, ENU_vz
 
-    '''
-    cur_p : poseStamped
-    target_p: positionTarget
-    threshold: threshold for position reach condition, unit: m
-    '''
-    def check_position_reach_condition(self, cur_p, target_p, threshold=0.1):
-        delta_x = math.fabs(cur_p.pose.position.x - target_p.position.x)
-        delta_y = math.fabs(cur_p.pose.position.y - target_p.position.y)
-
-        if (delta_x + delta_y < threshold):
-            return True
-        else:
-            return False
-
-
 def main():
 
     parser = argparse.ArgumentParser(description='python mavros main entry function')
