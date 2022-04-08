@@ -72,10 +72,10 @@ class Px4Controller:
         '''
         ros subscribers
         '''
-        self.local_pose_sub = rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_callback)
-        self.local_velocity_sub = rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, self.local_velocity_callback)
-        self.mavros_state_sub = rospy.Subscriber("/mavros/state", State, self.mavros_state_callback)
-        self.imu_sub = rospy.Subscriber("/mavros/imu/data", Imu, self.imu_callback)
+        self.local_pose_sub = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.local_pose_callback)
+        self.local_velocity_sub = rospy.Subscriber("mavros/local_position/velocity", TwistStamped, self.local_velocity_callback)
+        self.mavros_state_sub = rospy.Subscriber("mavros/state", State, self.mavros_state_callback)
+        self.imu_sub = rospy.Subscriber("mavros/imu/data", Imu, self.imu_callback)
         self.extended_sub = rospy.Subscriber("/mavros/extended_state", ExtendedState, self.extendedstate_callback)
 
         self.set_target_position_sub = rospy.Subscriber("gi/set_pose/position", PoseStamped, self.set_target_position_callback)
@@ -101,9 +101,9 @@ class Px4Controller:
         '''
         ros services
         '''
-        self.armService = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
-        self.flightModeService = rospy.ServiceProxy('/mavros/set_mode', SetMode)
-        self.cmdService= rospy.ServiceProxy('/mavros/cmd/command', CommandLong)
+        self.armService = rospy.ServiceProxy('mavros/cmd/arming', CommandBool)
+        self.flightModeService = rospy.ServiceProxy('mavros/set_mode', SetMode)
+        self.cmdService= rospy.ServiceProxy('mavros/cmd/command', CommandLong)
 
         print("Kerloud python API control interface initialized!")
 

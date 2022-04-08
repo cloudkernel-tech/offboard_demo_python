@@ -41,8 +41,8 @@ class Commander:
         self.custom_activity_pub = rospy.Publisher('gi/set_activity/type', String, queue_size=5)
         self.driving_state_pub = rospy.Publisher('gi/set_driving_state', Bool, queue_size=5)
 
-        self.local_pose_sub = rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_callback)
-        self.local_velocity_sub = rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, self.local_velocity_callback)
+        self.local_pose_sub = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.local_pose_callback)
+        self.local_velocity_sub = rospy.Subscriber("mavros/local_position/velocity", TwistStamped, self.local_velocity_callback)
         self.core_ready_sub = rospy.Subscriber("gi/core_ready", Bool, self.coreready_callback)
 
         print("Kerloud python API commander interface initialized!")
