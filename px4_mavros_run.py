@@ -525,6 +525,16 @@ class Px4Controller:
         else:
             print("transition to rover service call failed")
 
+    '''set desired driving state, state=1 for forward driving, state=0 for backward driving'''
+    def set_driving_state(self, state=1):
+        if self.cmdService(command=MAV_CMD_SET_ROVER_FORWARD_REVERSE_DRIVING, confirmation=0, param1=state):
+            self.flag_set_driving_state = False # clear the req flag in main loop
+            return True
+        else:
+            print("Vehicle set driving state service call failed")
+            return False
+
+
     ####### Actions for Kerloud vehicle operation ######
     def arm(self):
         if self.armService(True):
