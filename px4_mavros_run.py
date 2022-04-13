@@ -170,18 +170,29 @@ class Px4Controller:
         while not rospy.is_shutdown():
             # publications
             if self.cmd_mode == ROVER_POSITION_COMMAND_MODE:
-                self.local_target_pub.publish(self.cur_pos_target)
+                if self.cur_pos_target is not None:
+                    self.local_target_pub.publish(self.cur_pos_target)
+
             elif self.cmd_mode == ROVER_VELOCITY_COMMAND_MODE:
-                self.local_target_pub.publish(self.cur_vel_target)
+                if self.cur_vel_target is not None:
+                    self.local_target_pub.publish(self.cur_vel_target)
+
             elif self.cmd_mode == ROVER_ATTITUDE_COMMAND_MODE:
-                self.attitude_target_pub.publish(self.cur_attitude_target)
-                self.thrust_target_pub.publish(self.cur_thrust_target)
+                if (self.cur_attitude_target is not None) and (self.cur_thrust_target is not None):
+                    self.attitude_target_pub.publish(self.cur_attitude_target)
+                    self.thrust_target_pub.publish(self.cur_thrust_target)
+
             elif self.cmd_mode == ROVER_ACTUATOR_CONTROL_COMMAND_MODE:
-                self.actuator_control_target_pub.publish(self.cur_actuator_control_target)
+                if self.cur_actuator_control_target is not None:
+                    self.actuator_control_target_pub.publish(self.cur_actuator_control_target)
+
             elif self.cmd_mode == MC_POSITION_COMMAND_MODE:
-                self.local_target_pub.publish(self.cur_pos_target)
+                if self.cur_pos_target is not None:
+                    self.local_target_pub.publish(self.cur_pos_target)
+
             elif self.cmd_mode == MC_VELOCITY_COMMAND_MODE:
-                self.local_target_pub.publish(self.cur_vel_target)
+                if self.cur_vel_target is not None:
+                    self.local_target_pub.publish(self.cur_vel_target)
 
             self.flyingrover_mode_pub.publish(self.current_fr_mode)
             self.landedstate_pub.publish(String(self.landed_state))
