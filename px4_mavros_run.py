@@ -530,13 +530,23 @@ class Px4Controller:
 
     def transit_to_mc(self):
         if self.cmdService(command=MAV_CMD_DO_FLYINGROVER_TRANSITION, confirmation=0, param1=FLYINGROVER_STATE_MC):
-            print("transition to mc service is called")
+            self.cmd_mode = MC_POSITION_COMMAND_MODE
+            self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
+                                                                 self.local_pose.pose.position.y,
+                                                                 self.local_pose.pose.position.z,
+                                                                 self.current_heading)
+            print("transition to mc service is called, set position command mode by default")
         else:
             print("transition to mc service call failed")
 
     def transit_to_rover(self):
         if self.cmdService(command=MAV_CMD_DO_FLYINGROVER_TRANSITION, confirmation=0, param1=FLYINGROVER_STATE_ROVER):
-            print("transition to rover service is called")
+            self.cmd_mode = ROVER_POSITION_COMMAND_MODE
+            self.cur_pos_target = self.construct_position_target(self.local_pose.pose.position.x,
+                                                                 self.local_pose.pose.position.y,
+                                                                 self.local_pose.pose.position.z,
+                                                                 self.current_heading)
+            print("transition to rover service is called, set position command mode by default")
         else:
             print("transition to rover service call failed")
 
