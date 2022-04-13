@@ -149,8 +149,12 @@ class Px4Controller:
 
             while True:
                 self.local_target_pub.publish(self.cur_pos_target)
-                self.arm()
-                self.offboard()
+
+                if not self.arm_state:
+                    self.arm()
+
+                if not self.offboard_state:
+                    self.offboard()
 
                 if self.arm_state and self.offboard_state:
                     print("vehicle is armed and set in offboard mode")
