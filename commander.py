@@ -14,6 +14,12 @@ from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3Stamped
 from std_msgs.msg import Float32, String, Bool
 from mavros_msgs.msg import Thrust, ActuatorControl
 
+# landed state constants
+LANDED_STATE_UNDEFINED = 0
+LANDED_STATE_ON_GROUND = 1
+LANDED_STATE_IN_AIR = 2
+LANDED_STATE_TAKEOFF = 3
+LANDED_STATE_LANDING = 4
 
 class Commander:
     def __init__(self):
@@ -233,8 +239,9 @@ if __name__ == "__main__":
         print("waiting for the vehicle to be armed and in offboard")
         time.sleep(1)
 
-    # rover mission
+    # part 1: rover mission
     # position guidance cmd
+    print("Rover mission started")
     print("Commander interface: start position control mode")
     con.move_position(5, 0, 0)
     print("Rover: go to position (5,0,0)")
@@ -278,19 +285,30 @@ if __name__ == "__main__":
         time.sleep(2)
 
     # multicopter mission round
+    print("Multirotor mission started")
     con.move_position(5, 0, 5)
-    time.sleep(5)
+    print("Multirotor: go to position (5, 0, 5)")
+    time.sleep(10)
     con.move_position(5, 5, 5)
-    time.sleep(5)
+    print("Multirotor: go to position (5, 5, 5)")
+    time.sleep(10)
     con.move_position(0, 5, 5)
-    time.sleep(5)
+    print("Multirotor: go to position (0, 5, 5)")
+    time.sleep(10)
     con.move_position(0, 0, 5)
-    time.sleep(5)
+    print("Multirotor: go to position (0, 0, 5)")
+    time.sleep(10)
     con.land()
-    time.sleep(5)
+    print("Multirotor: land")
+    time.sleep(10)
 
     #disarm for safety at the end
-    con.disarm()
+    while True:
+        if con.landed_state == LANDED_STATE_ON_GROUND:
+            con.disarm()
+            print("vehicle disarm")
+            break
+        time.sleep(1.0)
 
 
 
