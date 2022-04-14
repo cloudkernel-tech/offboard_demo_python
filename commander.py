@@ -282,7 +282,7 @@ if __name__ == "__main__":
     while not con.flyingrover_mode == "MC":
         print("request to transit to multicopter mode")
         con.transit_to_mc()
-        time.sleep(2)
+        time.sleep(0.5)
 
     # multicopter mission round
     print("Multirotor mission started")
