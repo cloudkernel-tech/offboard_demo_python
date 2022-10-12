@@ -27,7 +27,7 @@ class Commander:
         self.custom_activity_pub = rospy.Publisher('gi/set_activity/type', String, queue_size=10)
 
         self.local_pose_sub = rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_callback)
-        self.flyingrover_mode_sub = rospy.Subscriber("gi/flyingrove_mode", String, self.flyingrover_mode_callback)
+        self.flyingrover_mode_sub = rospy.Subscriber("gi/flyingrover_mode", String, self.flyingrover_mode_callback)
         self.core_ready_sub = rospy.Subscriber("gi/core_ready", Bool, self.coreready_callback)
         self.landedstate_sub = rospy.Subscriber("gi/landed_state", String, self.landedstate_callback)
 

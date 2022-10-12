@@ -67,7 +67,7 @@ class Px4Controller:
         ros publishers
         '''
         self.local_target_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        self.flyingrover_mode_pub = rospy.Publisher('gi/flyingrove_mode', String, queue_size=2)
+        self.flyingrover_mode_pub = rospy.Publisher('gi/flyingrover_mode', String, queue_size=2)
         self.core_ready_pub = rospy.Publisher('gi/core_ready', Bool, queue_size=2)
         self.landedstate_pub = rospy.Publisher('gi/landed_state', String, queue_size=2)
 
